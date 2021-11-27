@@ -1,0 +1,42 @@
+Metadata-Version: 2.1
+Name: lshw
+Version: 0.0.1
+Summary: lshw is a small tool to extract detailed information on the hardware configuration of the machine.
+Home-page: https://github.com/null-none/python-lshw
+Author: Kalinin Mitko
+Author-email: kalinin.mitko@gmail.com
+License: UNKNOWN
+Project-URL: Bug Tracker, https://github.com/null-none/python-lshw/issues
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+License-File: LICENSE
+
+# lshw
+lshw is a small tool to extract detailed information on the hardware configuration of the machine.
+
+### Pip install
+
+```bash
+pip install lshw
+```
+
+### Example
+
+
+```python
+
+from lshw.client import ListHardware
+
+list_hardware = ListHardware()
+result = list_hardware.read_data(list_hardware.get_nic_data())
+print(result)
+```
+
+### License
+
+MIT
+
