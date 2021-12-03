@@ -9,11 +9,8 @@ import webbrowser
 from json import JSONDecodeError
 
 
-import wx
-import requests
-from wx import ID_ANY, DefaultPosition, DefaultSize, DefaultValidator
-from wx.ribbon import RIBBON_BAR_DEFAULT_STYLE
 
+from urllib import request
 
 
 
@@ -183,7 +180,7 @@ class device_details:
 
     def get_repository_details(self ):
         current_repository = None
-        response = requests.get(
+        response = request.get(
             'https://www.tuxconfig.com/user/get_device/' + self.vendor_id + ":" + self.device_id + "/" + get_platform())
         if response.status_code >= 400 and response.status_code < 400:
             return "connection error"
@@ -212,33 +209,28 @@ class device_details:
                         self.pk = current_repository['pk']
             except JSONDecodeError:
                 return "cannot parse server request"
+    def getString(self):
+            return self.device_vendor + " " + self.device_name
 
-    def write_to_file(self):
 
-        f = open("/var/lib/tuxconfig_conf", "w")
-        json_string = json.dumps({"vendor_id": self.vendor_id, "device_id": self.device_id, "revision": self.revision,
-                                  "vendor_name": self.device_vendor, "device_name": self.device_name,
-                                  "driver": self.driver, "clone_url": self.clone_url, "stars": self.stars,
-                                  "pk": self.pk, "tried": self.tried, "success": self.success})
-        f.write(json_string)
-        f.close()
 
     def __init__(self):
 
-        self.vendor_id = None
-        self.device_id = None
-        self.revision = None
-        self.device_name = None
-        self.device_vendor = None
-        self.driver = None
-        self.subsystem = None
-        self.clone_url = None
-        self.commit = None
-        self.stars = None
-        self.pk = None
-        self.tried = False
-        self.success = False
-        self.available = False
+            self.vendor_id = None
+            self.device_id = None
+            self.revision = None
+            self.device_name = None
+            self.device_vendor = None
+            self.driver = None
+            self.subsystem = None
+            self.clone_url = None
+            self.commit = None
+            self.stars = None
+            self.pk = None
+            self.tried = False
+            self.success = False
+            self.available = False
+
 
     def getString(self):
         if self.driver:
@@ -246,7 +238,8 @@ class device_details:
         else:
             self.installed = "not installed"
 
-        return self.vendor_id + ":" + self.device_id + " " +  self.device_vendor + " "+ self.device_name
+
+        return self.vendor_id + ":" + self.device_id + " " +  self.device_vendor + " "+ self.device_name + self.installed
 
     def getAvailable(self):
         return self.available
@@ -254,8 +247,38 @@ class device_details:
     def getHardwareID(self):
         return self.vendor_id + ":" + self.device_id + self.device_vendor + self.device_name
 
+def write_to_file(item_to_add):
 
-notebook = None
+    f = open("/var/lib/tuxconfig_conf", "w")
+    json_string = json.dumps({"vendor_id": item_to_add.vendor_id, "device_id": item_to_add.device_id, "revision": item_to_add.revision,
+                              "vendor_name": item_to_add.device_vendor, "device_name": item_to_add.device_name,
+                              "driver": item_to_add.driver, "clone_url": item_to_add.clone_url, "stars": item_to_add.stars,
+                              "pk": item_to_add.pk, "tried": item_to_add.tried, "success": item_to_add.success})
+    f.write(json_string)
+    f.close()
+
+def parse_tuxconfig_file():
+    devices_list = []
+    with open("/var/lib/tuxconfig_conf","wr") as file:
+        for line in file:
+            devices_list.append(json.loads(line))
+    file.close()
+    return devices_list
+
+def remove_line(self,item_to_remove):
+    device_list = self.parse_tuxconfig_file()
+    for i in device_list:
+        if i is item_to_remove:
+            device_list.remove(i)
+    f = open("/var/lib/tuxconfig_conf", "w")
+    for i in device_list:
+        f.write(json.dumps(i))
+    f.close()
+
+
+
+
+
 
 
 
@@ -289,10 +312,15 @@ if __name__ == '__main__':
         device_to_install = device_map[install_number_int -1 ]
         install_result = run_install(device_to_install)
     if install_result is True:
+        device_to_install.success = True
+        device_to_install.tried = True
         print("https://www.tuxconfig.com/user/get_contiributor/" + device_to_install.pk )
     else:
+        device_to_install.success = True
+        device_to_install.tried = False
         print ("install failed")
 
+    f = open("/var/lib/tuxconfig_conf", "w")
 
 
 
