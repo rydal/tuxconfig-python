@@ -1,0 +1,16 @@
+
+[2021-11-23 11:18:17] Traceback (most recent call last):
+  File "main.py", line 31, in <module>
+    browser_frame = test_thread(tab1,"https://www.google.com")
+  File "/home/roberty/IdeaProjects/tuxconfig-python/index2.py", line 11, in test_thread
+    window_info.SetAsChild(frame.winfo_id(), rect)
+TypeError: Argument 'windowRect' has incorrect type (expected list, got builtin_function_or_method)
+
+
+[2021-11-23 11:25:54] Traceback (most recent call last):
+  File "index.py", line 30, in <module>
+    browser_frame = test_thread(tab1,"https://www.google.com")
+  File "index.py", line 13, in test_thread
+    window_info.SetAsChild(frame.winfo_id(), rect)
+NameError: name 'rect' is not defined
+

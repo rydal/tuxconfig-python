@@ -1,16 +1,20 @@
 #!/usr/bin/python3
+import datetime
 import json
 import os
 import platform
 import random
 import string
 import subprocess
+import sys
 import urllib
 import webbrowser
 from json import JSONDecodeError
-
+from pathlib import Path
 
 import requests
+
+
 
 
 def run_install(device):
@@ -21,7 +25,7 @@ def run_install(device):
     streamdata = clone_git.communicate()[0]
     if clone_git.returncode > 0:
         print( "Error cloning git repo")
-        return
+        return False
 
     print ("Reseting git head")
     set_git_commit = subprocess.Popen(["git", "reset", "--hard", device.commit], cwd='/tmp/' + directory,
@@ -30,10 +34,11 @@ def run_install(device):
 
     if set_git_commit.returncode > 0:
         print( "Error setting Git branch")
+        return False
 
     if not os.path.exists("/tmp/" + directory + "/tuxconfig.conf"):
         print( "Tuxconfig file not in directory")
-        return
+        return False
 
     install_command = None
     test_command = None
@@ -50,12 +55,21 @@ def run_install(device):
             if "test_command" in line:
                 line.split("=")
                 test_command = line.split("=")[1].strip("\"")
-            if "module_name" in line:
+            if "module_id" in line:
                 line.split("=")
                 module_name = line.split("=")[1].strip("\"")
+    installed = get_device_installed_list(module_name)
+    if installed is True:
+        print ("Uninstalling current module")
+        uninstall = subprocess.Popen(["dmks", "remove", installed + "--all"], cwd='/tmp/' + directory,
+                                          stdout=subprocess.PIPE)
+        uninstall.communicate()[0]
 
+        sys.exit(5)
+    print ("installing module, takes some time.")
     if install_command.startswith("./"):
         install_command = install_command[2:len(install_command)]
+    
     install_module = subprocess.Popen(["sudo", "/tmp/" + directory + "/" + install_command], stdout=subprocess.PIPE,
                                       cwd="/tmp/" + directory)
 
@@ -63,16 +77,16 @@ def run_install(device):
 
     if install_module.returncode > 0:
         print( "Error installing module")
-        return
+        return False
 
     test_module = subprocess.Popen(["bash",test_command], stdout=subprocess.PIPE,
                                    cwd="/tmp/" + directory)
     streamdata = test_module.communicate()[0]
     if install_module.returncode > 0:
         print( "Error testing module")
-        return
-
-    return "Module installed!"
+        return False
+    print("Module installed!")
+    return True
 
 
 def find_device_ids(type):
@@ -184,14 +198,21 @@ class device_details:
     def setSubsystem(self, subsystem):
         self.subsystem = subsystem
 
+    def setCloneUrl(self, clone_url):
+        self.subsystem = clone_url
+
+    def setCommit(self, commit):
+        self.commit = commit
+
     def get_repository_details(self ):
-        current_repository = None
         response = requests.get(
             'https://www.tuxconfig.com/user/get_device/' + self.vendor_id + ":" + self.device_id + "/" + get_platform())
         if response.status_code >= 400 and response.status_code < 400:
-            return "connection error"
+            print ("connection error")
+            return False
         elif response.status_code >= 500:
-            return  "server error"
+            print("server error")
+            return False
         else:
             try:
                 string = response.content.decode('utf-8')
@@ -200,31 +221,25 @@ class device_details:
                 if "none" in json_response:
                     self.available = False
                 else:
-                    if len(json_response) == 0:
-                        print(
-                            'https://www.tuxconfig.com/user/get_device/' + self.vendor_id + ":" + self.device_id + "/" + get_platform())
-                        return None, "empty list"
+
+
                     current_repository = json_response[0]
+
                     for repository in json_response:
                         if repository['stars'] > current_repository['stars']:
                             current_repository = repository
+                        if already_installed(current_repository['clone_url'],current_repository['commit']):
+                            print("Trying next favoured install for " + self.device_vendor + " " + self.device_name)
+
                         self.available = True
                         self.clone_url = current_repository['clone_url']
                         self.commit = current_repository['commit']
                         self.stars = current_repository['stars']
                         self.pk = current_repository['pk']
+                    return current_repository
             except JSONDecodeError:
-                return "cannot parse server request"
-
-    def write_to_file(self):
-
-        f = open("/var/lib/tuxconfig_conf", "w")
-        json_string = json.dumps({"vendor_id": self.vendor_id, "device_id": self.device_id, "revision": self.revision,
-                                  "vendor_name": self.device_vendor, "device_name": self.device_name,
-                                  "driver": self.driver, "clone_url": self.clone_url, "stars": self.stars,
-                                  "pk": self.pk, "tried": self.tried, "success": self.success})
-        f.write(json_string)
-        f.close()
+                print("cannot parse server request")
+                return False
 
     def __init__(self):
 
@@ -244,34 +259,66 @@ class device_details:
         self.available = False
 
     def getString(self):
-        if self.driver:
-            self.installed = "installed"
-        else:
-            self.installed = "not installed"
-
-        return self.vendor_id + ":" + self.device_id + " " +  self.device_vendor + " "+ self.device_name
+        return self.vendor_id + ":" + self.device_id + " " +  self.device_vendor + " " + self.device_name + "\n"
 
     def getAvailable(self):
         return self.available
 
-    def getHardwareID(self):
-        return self.vendor_id + ":" + self.device_id + self.device_vendor + self.device_name
 
-def get_device_installed_list():
+def write_to_file(device):
+    f = open("/var/lib/tuxconfig.log", "w+")
 
-    get_packages = subprocess.Popen(["dkms status | cut -d\",\" -f 1"],shell=True)
-    packages = get_packages.stdout.read()
-    print (packages)
-    package_list = []
-    for package in packages.decode("utf-8").split("\n"):
-        package_list.append(package)
-    return package_list
+    now = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%f')
+    json_string = json.dumps({"vendor_id": device.vendor_id, "device_id": device.device_id, "revision": device.revision,
+                              "vendor_name": device.device_vendor, "device_name": device.device_name,
+                              "driver": device.driver, "clone_url": device.clone_url, "stars": device.stars,"commit" : device.commit,
+                              "pk": device.pk, "tried": device.tried, "success": device.success, "time" : now})
+
+    f.write(json_string)
+    f.close()
+
+
+def get_device_installed_list(module_name):
+
+    get_packages = subprocess.Popen(["dkms status | cut -d\",\" -f 1,2"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    output = get_packages.communicate()[0].decode("utf-8")
+    for package in output.split("\n"):
+        package.strip(": added")
+        package_details = package.strip().split(",")
+        if package_details[0] == module_name:
+
+            return package_details[0] + "/" + package_details[1].strip()
+    return False
+
+def already_installed(clone_url,commit):
+    tuxconfig_file  = Path('/var/lib/tuxconfig.log')
+    if tuxconfig_file.is_file():
+        with open('/var/lib/tuxconfig.log') as file:
+            for line in file:
+                checking_device = json.loads(line)
+                if checking_device['clone_url'] == clone_url and checking_device['commit'] == commit:
+                    if checking_device['tried'] is True:
+                        print("Install attempted and failed")
+                    else:
+                        print("Install not attempted")
+                    if checking_device['success'] is True:
+                        print("Install marked as successful")
+                    else:
+                        print("Install marked as unsuccessful")
+                    if checking_device['tried'] is True and  checking_device['success'] is True:
+                        return True
+
+    return False
+
 
 
 
 if __name__ == '__main__':
-    get_device_installed_list()
-    exit(0)
+
+    if os.geteuid() != 0:
+        print("Please run as root / using sudo")
+        exit(1)
+    print ("Getting available drivers")
     devices = []
     pci_devices = find_device_ids("pci")
     devices.append(pci_devices)
@@ -279,13 +326,19 @@ if __name__ == '__main__':
     devices.append(usb_devices)
     index = 0
     device_map = []
+
+    empty_list = False
     for device in devices:
         for a in device.values():
-            a.get_repository_details()
+            error = a.get_repository_details()
             if a.available:
+                empty_list = True
                 device_map.append( a)
                 index += 1
-                print(str(index) + ") " + a.getString() + " installable from Tuxconfig.com")
+                print(str(index) + ") " + a.getString() + "\ninstallable from www.tuxconfig.com")
+    if empty_list is False:
+        print("No more drivers available for this device")
+        exit(2)
 
     install_number = input("Select device from list: ")   # Python 3
     install_number_int = 1
@@ -295,18 +348,27 @@ if __name__ == '__main__':
         print("Not a valid choice number")
     install_result = False
     device_to_install = None
-    if int(install_number) > len(device_map):
+    if install_number_int > len(device_map):
         print("Not a valid choice number")
+        exit(5)
     else:
-        device_to_install = device_map[install_number_int -1 ]
-        if device_to_install.module_name
+
+        for device in device_map:
+            print("Try install with " + device.stars + " github rating?")
+        if len(device_map) > 1:
+            try_install = input("Select device driver to try, number between 1 and " +  str(len(device_map)))  + ":"
+        else:
+            try_install = 1
+        device_to_install = device_map[ int(try_install) - 1 ]
+        device_to_install.tried= True
         install_result = run_install(device_to_install)
-
-    if install_result is True:
-        print("https://www.tuxconfig.com/user/get_contiributor/" + device_to_install.pk )
-    else:
-        print ("install failed")
-
+        if install_result is True:
+            device_to_install.success = True
+            set_git_commit = subprocess.Popen(["xdg-open", "https://www.tuxconfig.com/user/get_contributor/" + str(device_to_install.pk) ],stdout=subprocess.PIPE)
+        else:
+            device_to_install.success = False
+            print ("install failed")
+            write_to_file(device_to_install)
 
 
 

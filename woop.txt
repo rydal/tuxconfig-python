@@ -1,0 +1,4 @@
+dist-utils-extra
+
+pip:
+pillow
