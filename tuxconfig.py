@@ -14,31 +14,33 @@ from pathlib import Path
 
 import requests
 
+class InstallUpdates:
+    result = ""
 
-
-
-def run_install(device):
+def run_install(button,device):
 
     directory = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
     print ("cloning repository")
+    InstallUpdates.result += "cloning repository\n"
     clone_git = subprocess.Popen(["git", "clone", device.clone_url, "/tmp/" + directory], stdout=subprocess.PIPE)
     streamdata = clone_git.communicate()[0]
     if clone_git.returncode > 0:
-        print( "Error cloning git repo")
-        return False
+        return  "Error cloning git repo"
+
 
     print ("Reseting git head")
+    InstallUpdates.result += "Reseting git head\n"
     set_git_commit = subprocess.Popen(["git", "reset", "--hard", device.commit], cwd='/tmp/' + directory,
                                       stdout=subprocess.PIPE)
     streamdata = set_git_commit.communicate()[0]
-
+    InstallUpdates.result += streamdata
     if set_git_commit.returncode > 0:
-        print( "Error setting Git branch")
-        return False
+        return  "Error setting Git branch"
+
 
     if not os.path.exists("/tmp/" + directory + "/tuxconfig.conf"):
-        print( "Tuxconfig file not in directory")
-        return False
+        return "Tuxconfig file not in directory"
+
 
     install_command = None
     test_command = None
@@ -61,10 +63,11 @@ def run_install(device):
     installed = get_device_installed_list(module_name)
     if installed is True:
         print ("Uninstalling current module")
+        InstallUpdates.result += "Uninstalling current module\n"
         uninstall = subprocess.Popen(["dmks", "remove", installed + "--all"], cwd='/tmp/' + directory,
                                           stdout=subprocess.PIPE)
-        uninstall.communicate()[0]
-
+        streamdata = uninstall.communicate()[0]
+        InstallUpdates.result += streamdata
         sys.exit(5)
     print ("installing module, takes some time.")
     if install_command.startswith("./"):
@@ -76,15 +79,16 @@ def run_install(device):
     streamdata = install_module.communicate()[0]
 
     if install_module.returncode > 0:
-        print( "Error installing module")
-        return False
+        return "Error installing module"
+
 
     test_module = subprocess.Popen(["bash",test_command], stdout=subprocess.PIPE,
                                    cwd="/tmp/" + directory)
     streamdata = test_module.communicate()[0]
+    InstallUpdates.result += streamdata
     if install_module.returncode > 0:
-        print( "Error testing module")
-        return False
+        return "Error testing module"
+
     print("Module installed!")
     return True
 
@@ -264,6 +268,12 @@ class device_details:
     def getAvailable(self):
         return self.available
 
+    def getCommit(self):
+        return self.commit
+
+    def getCloneUrl(self):
+        return self.clone_url
+
 
 def write_to_file(device):
     f = open("/var/lib/tuxconfig.log", "w+")
@@ -361,15 +371,15 @@ if __name__ == '__main__':
             try_install = 1
         device_to_install = device_map[ int(try_install) - 1 ]
         device_to_install.tried= True
-        install_result = run_install(device_to_install)
+        install_result = run_install(None,device_to_install)
         if install_result is True:
             device_to_install.success = True
             set_git_commit = subprocess.Popen(["xdg-open", "https://www.tuxconfig.com/user/get_contributor/" + str(device_to_install.pk) ],stdout=subprocess.PIPE)
         else:
             device_to_install.success = False
-            print ("install failed")
-            write_to_file(device_to_install)
 
+            print ("install failed" +  " " + install_result)
+            write_to_file(device_to_install)
 
 
 
