@@ -2,12 +2,13 @@ import threading
 import time
 
 import gi
+import glib
 
-from tuxconfig import find_device_ids, already_installed, run_install
+from tuxconfig import find_device_ids, already_installed, run_install, InstallUpdates
 
 gi.require_version("Gtk", "3.0")
 gi.require_version('WebKit2', '4.0')
-from gi.repository import Gtk, GLib
+from gi.repository import Gtk, GLib, GObject
 from gi.repository import WebKit2
 
 
@@ -70,39 +71,57 @@ class MyWindow(Gtk.Window):
         label = Gtk.Label(label=device.getString())
         label.set_alignment(0.0,0.0)
         grid.attach(label,0,0,1,1)
+        update = Gtk.Label(label="Install details")
+        update.set_alignment(0.0,0.0)
+        grid.attach(update,0,1,1,1)
+        result_label = Gtk.Label(label="Result")
+        result_label.set_alignment(0.0,0.0)
+        grid.attach(result_label,0,2,1,1)
+
+
+        def run_install_thread(button,device):
+            thread = threading.Thread(target=example_target)
+            thread.daemon = True
+            thread.start()
+            result = run_install(None,device)
+            if result is True:
+                result_label.set_markup("<span color='green'>{} </span>".format("Device installed successfully"))
+            else:
+                result_label.set_markup("<span color='red'>{} </span>".format("Device install failed"))
+
 
 
         if device.tried:
             button = Gtk.Button.new_with_label("try next")
-            button.connect("clicked", run_install,device)
-            grid.attach(button,0,1,1,1)
+            button.connect("clicked", run_install_thread,device)
+            grid.attach(button,0,3,1,1)
             button = Gtk.Button.new_with_label("remove")
-            button.connect("clicked", run_install,device)
-            grid.attach(button,0,2,1,1)
+            button.connect("clicked", run_install_thread,device)
+            grid.attach(button,0,4,1,1)
         else:
             button = Gtk.Button.new_with_label("install")
-            button.connect("clicked", run_install,device)
-            grid.attach(button,0,1,1,1)
+            button.connect("clicked", run_install_thread,device)
+            grid.attach(button,0,3,1,1)
         page.add(grid)
 
         progress = Gtk.ProgressBar(show_text=True)
         page.add(progress)
 
-        def update_progess(i):
+        def update_progess():
             progress.pulse()
-            progress.set_text(str(i))
+            GLib.idle_add(update.set_text,InstallUpdates.result + "\n")
+
+
             return False
 
         def example_target():
-            for i in range(50):
-                GLib.idle_add(update_progess, i)
+            while True:
+                GLib.idle_add(update_progess)
                 time.sleep(0.2)
+
 
         win.show_all()
 
-        thread = threading.Thread(target=example_target)
-        thread.daemon = True
-        thread.start()
 
         page.show_all()
         return page

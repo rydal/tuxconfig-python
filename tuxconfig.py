@@ -16,6 +16,7 @@ import requests
 
 class InstallUpdates:
     result = ""
+    completed = 0
 
 def run_install(button,device):
 
@@ -24,6 +25,10 @@ def run_install(button,device):
     InstallUpdates.result += "cloning repository\n"
     clone_git = subprocess.Popen(["git", "clone", device.clone_url, "/tmp/" + directory], stdout=subprocess.PIPE)
     streamdata = clone_git.communicate()[0]
+    InstallUpdates.result += str(streamdata,"utf-8") +  "\n"
+    InstallUpdates.completed += 1
+
+
     if clone_git.returncode > 0:
         return  "Error cloning git repo"
 
@@ -33,7 +38,9 @@ def run_install(button,device):
     set_git_commit = subprocess.Popen(["git", "reset", "--hard", device.commit], cwd='/tmp/' + directory,
                                       stdout=subprocess.PIPE)
     streamdata = set_git_commit.communicate()[0]
-    InstallUpdates.result += streamdata
+    InstallUpdates.result += str(streamdata,"utf-8") +  "\n"
+    InstallUpdates.completed += 1
+
     if set_git_commit.returncode > 0:
         return  "Error setting Git branch"
 
@@ -67,26 +74,32 @@ def run_install(button,device):
         uninstall = subprocess.Popen(["dmks", "remove", installed + "--all"], cwd='/tmp/' + directory,
                                           stdout=subprocess.PIPE)
         streamdata = uninstall.communicate()[0]
-        InstallUpdates.result += streamdata
-        sys.exit(5)
+        InstallUpdates.result += str(streamdata,"utf-8") +  "\n"
+        InstallUpdates.completed += 1
+
     print ("installing module, takes some time.")
     if install_command.startswith("./"):
         install_command = install_command[2:len(install_command)]
-    
-    install_module = subprocess.Popen(["sudo", "/tmp/" + directory + "/" + install_command], stdout=subprocess.PIPE,
+
+    install_module = subprocess.Popen(["/tmp/" + directory + "/" + install_command], stdout=subprocess.PIPE,
                                       cwd="/tmp/" + directory)
 
     streamdata = install_module.communicate()[0]
+    InstallUpdates.result += str(streamdata,"utf-8") +  "\n"
+    InstallUpdates.completed += 1
 
     if install_module.returncode > 0:
         return "Error installing module"
-
+    InstallUpdates.result += str(streamdata,"utf-8") +  "\n"
+    InstallUpdates.completed += 1
 
     test_module = subprocess.Popen(["bash",test_command], stdout=subprocess.PIPE,
                                    cwd="/tmp/" + directory)
     streamdata = test_module.communicate()[0]
-    InstallUpdates.result += streamdata
-    if install_module.returncode > 0:
+    InstallUpdates.result += str(streamdata,"utf-8") +  "\n"
+    InstallUpdates.completed += 1
+
+    if test_module.returncode > 0:
         return "Error testing module"
 
     print("Module installed!")
