@@ -90,8 +90,6 @@ def run_install(button,device):
 
     if install_module.returncode > 0:
         return "Error installing module"
-    InstallUpdates.result += str(streamdata,"utf-8") +  "\n"
-    InstallUpdates.completed += 1
 
     test_module = subprocess.Popen(["bash",test_command], stdout=subprocess.PIPE,
                                    cwd="/tmp/" + directory)

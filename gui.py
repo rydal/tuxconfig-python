@@ -74,7 +74,7 @@ class MyWindow(Gtk.Window):
         update = Gtk.Label(label="Install details")
         update.set_alignment(0.0,0.0)
         grid.attach(update,0,1,1,1)
-        result_label = Gtk.Label(label="Result")
+        result_label = Gtk.Label(label="")
         result_label.set_alignment(0.0,0.0)
         grid.attach(result_label,0,2,1,1)
 
@@ -104,11 +104,9 @@ class MyWindow(Gtk.Window):
             grid.attach(button,0,3,1,1)
         page.add(grid)
 
-        progress = Gtk.ProgressBar(show_text=True)
-        page.add(progress)
+
 
         def update_progess():
-            progress.pulse()
             GLib.idle_add(update.set_text,InstallUpdates.result + "\n")
 
 
