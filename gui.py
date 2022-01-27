@@ -1,3 +1,4 @@
+import os
 import threading
 import time
 
@@ -44,11 +45,14 @@ class MyWindow(Gtk.Window):
     def AboutPage(self):
         page = Gtk.VBox(homogeneous=False, spacing=0)
         page.set_border_width(10)
-
-
-        webView = WebKit2.WebView()
-        webView.load_uri("https://www.tuxconfig.com")
-        page.add(webView)
+        if os.geteuid() != 0:
+            label = Gtk.Label(label="Must be run as root!")
+            label.set_alignment(0.0,0.0)
+            page.add(label)
+        else:
+            webView = WebKit2.WebView()
+            webView.load_uri("https://www.tuxconfig.com")
+            page.add(webView)
         page.show_all()
         return page
 
