@@ -32,7 +32,7 @@ class MyWindow(Gtk.Window):
     @classmethod
     def set_about_page(self,device):
         MyWindow.notebook.append_page(self.CreatorPage(self.notebook,device), Gtk.Label(label="Contributor"))
-        MyWindow.notebook.set_current_page(4)
+        MyWindow.notebook.set_current_page(3)
 
     @classmethod
     def set_install_page(self,button,device):
@@ -86,6 +86,7 @@ class MyWindow(Gtk.Window):
             result = run_install(None,device)
             if result is True:
                 result_label.set_markup("<span color='green'>{} </span>".format("Device installed successfully"))
+                MyWindow.set_about_page(device)
             else:
                 result_label.set_markup("<span color='red'>{} </span>".format("Device install failed"))
 
