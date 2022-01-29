@@ -5,7 +5,7 @@ import time
 import gi
 import glib
 
-from tuxconfig import find_device_ids, already_installed, run_install, InstallUpdates
+from tuxconfig import find_device_ids, already_installed, run_install, InstallUpdates, write_to_file
 
 gi.require_version("Gtk", "3.0")
 gi.require_version('WebKit2', '4.0')
@@ -89,10 +89,14 @@ class MyWindow(Gtk.Window):
             thread.start()
             result = run_install(None,device)
             if result is True:
+                device.successsuccess = True
                 result_label.set_markup("<span color='green'>{} </span>".format("Device installed successfully"))
                 MyWindow.set_about_page(device)
             else:
+                device.success = False
                 result_label.set_markup("<span color='red'>{} </span>".format("Device install failed"))
+            write_to_file(device)
+
 
 
 
@@ -123,10 +127,6 @@ class MyWindow(Gtk.Window):
                 time.sleep(0.2)
 
 
-        win.show_all()
-
-
-        page.show_all()
         return page
 
     device_map = []

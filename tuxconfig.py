@@ -390,7 +390,7 @@ if __name__ == '__main__':
             device_to_install.success = False
 
             print ("install failed" +  " " + install_result)
-            write_to_file(device_to_install)
+        write_to_file(device_to_install)
 
 
 
