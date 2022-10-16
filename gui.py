@@ -3,137 +3,170 @@ import threading
 import time
 
 import gi
-import glib
+import tkinter as tk
 
-from tuxconfig import find_device_ids, already_installed, run_install, InstallUpdates, write_to_file
+from gi.repository.GLib import Thread
 
-gi.require_version("Gtk", "3.0")
+gi.require_version('Gtk', '3.0')
+gi.require_version('Vte', '2.91')  # vte-0.38 (gnome-3.4)
 gi.require_version('WebKit2', '4.0')
-from gi.repository import Gtk, GLib, GObject
-from gi.repository import WebKit2
+from gi.repository import Gtk, WebKit2, Vte, GLib, GObject
+from tuxconfig import find_device_ids, run_install, InstallUpdates, write_to_file, device_details, install_success, \
+    install_failed
+import threading as th
+# install_command
+# test_command
+# module_id
 
-
+# uninstall_module
+# install_module
+# test_module
+# pkill -sigusr1
+# term.watch_child(pid[1])
 
 class MyWindow(Gtk.Window):
-    notebook = Gtk.Notebook()
     def __init__(self):
         super().__init__(title="Tuxconfig")
         self.set_border_width(3)
-        
+
+        self.notebook = Gtk.Notebook()
+        self.add(self.notebook)
+
+        self.page1 = Gtk.Box()
+        self.page1.set_border_width(10)
+        self.page1.add(Gtk.Label(label="Default Page!"))
+        self.notebook.append_page(self.page1, Gtk.Label(label="Plain Title"))
+
+        self.page2 = Gtk.Box()
+        self.page2.set_border_width(10)
+        self.page2.add(Gtk.Label(label="A page with an image for a Title."))
+
+class AboutPage:
+    def __init__(self):
+        self.page = Gtk.Box()
+        self.page.set_border_width(10)
+        self.page.add(Gtk.Label(label="About Tuxconfig"))
+        if os.geteuid() != 0:
+            label = Gtk.Label(label="Must be run as root!")
+            label.set_alignment(0.0, 0.0)
+            self.page.pack_start(label,True,True,2)
+        else:
+            webView = WebKit2.WebView()
+            webView.load_uri("https://www.tuxconfig.com")
+            self.page.pack_end(webView,True,True,2)
+            self.page.show_all()
+
+    def get_page(self):
+        return self
+class CreatorPage:
+    def __init__(self):
+        self.page = Gtk.Box()
+        self.page.set_border_width(10)
+        self.page.add(Gtk.Label(label="About Creator"))
+        webView = WebKit2.WebView()
+        webView.load_uri("https://www.tuxconfig.com/user/get_contributor/" + str(current_device.pk))
+        self.page.add(webView)
+        self.page.show_all()
+
+    def get_page(self):
+        return self
+
+class InstallPage(GObject.GObject):
+    __gsignals__ = {
+        'my_signal': (GObject.SIGNAL_RUN_FIRST, None,
+                      (int,))
+    }
+    def do_my_signal(self, arg):
+        print("method handler for `my_signal' called with argument", arg)
+
+    def run_install_thread(self,device):
+
+        self.terminal.spawn_sync(
+            Vte.PtyFlags.DEFAULT,
+            os.environ['HOME'],
+            ["/bin/sh"],
+            [],
+            GLib.SpawnFlags.DO_NOT_REAP_CHILD,
+            None,
+            None,
+        )
 
 
+    def __init__(self):
+        self.page = Gtk.Box()
+        self.grid = Gtk.Grid()
+        label = Gtk.Label(label=current_device.getString())
+        label.set_alignment(0.0, 0.0)
+        self.grid.attach(label, 0, 0, 1, 1)
+        update = Gtk.Label(label="Install details:")
+        update.set_alignment(0.0, 0.0)
+        self.grid.attach(update, 0, 1, 1, 1)
+        self.terminal = Vte.Terminal()
+        result_label = Gtk.Label(label="Result:")
+        result_label.set_alignment(0.0, 0.0)
+        self.grid.attach(result_label, 0, 2, 1, 1)
+        self.result = Gtk.Label(label="")
+        self.result.set_alignment(0.0, 0.0)
+        self.grid.attach(result_label, 0, 2, 1, 1)
+
+        win.connect('delete-event', Gtk.main_quit)
+        self.grid.add(self.terminal)
+        if current_device.tried:
+            button = Gtk.Button.new_with_label("try next driver")
+            button.connect("clicked", self.run_install_thread, current_device)
+            self.grid.attach(button, 0, 3, 1, 1)
+            button = Gtk.Button.new_with_label("remove driver")
+            button.connect("clicked", self.run_install_thread, current_device)
+            self.grid.attach(button, 0, 4, 1, 1)
+        else:
+            button = Gtk.Button.new_with_label("install driver")
+            button.connect("clicked", self.run_install_thread, current_device)
+            self.grid.attach(button, 0, 3, 1, 1)
+
+        self.grid.show_all()
+        self.page.add(self.grid)
+
+    def show_result(self):
+        if install_success:
+            self.result.set_markup("<span color='green'>{} </span>".format("Device installed successfully"))
+        elif install_failed:
+            self.result.set_markup("<span color='red'>{} </span>".format("Device install failed"))
+
+    def get_page(self):
+        return self
+
+
+current_device = device_details()
+class MyWindow(Gtk.Window):
+    notebook = Gtk.Notebook()
+
+    def __init__(self):
+        super().__init__(title="Tuxconfig")
+        self.set_border_width(3)
 
         self.add(MyWindow.notebook)
-
 
         MyWindow.notebook.append_page(self.AboutPage(), Gtk.Label(label="About"))
         MyWindow.notebook.append_page(self.DevicePage(), Gtk.Label(label="List devices"))
 
-
     @classmethod
-    def set_about_page(self,device):
-        MyWindow.notebook.append_page(self.CreatorPage(self.notebook,device), Gtk.Label(label="Contributor"))
+    def set_about_page(self):
+        creator_page = self.CreatorPage()
+        MyWindow.notebook.append_page(creator_page, Gtk.Label(label="Contributor"))
         MyWindow.notebook.set_current_page(3)
 
     @classmethod
-    def set_install_page(self,button,device):
-        MyWindow.notebook.append_page(self.InstallPage(self.notebook,device), Gtk.Label(label="Developer"))
+    def set_install_page(self):
+        MyWindow.notebook.append_page(self.InstallPage(), Gtk.Label(label="Developer"))
         MyWindow.notebook.set_current_page(2)
 
 
 
-    def AboutPage(self):
-        page = Gtk.VBox(homogeneous=False, spacing=0)
-        page.set_border_width(10)
-        if os.geteuid() != 0:
-            label = Gtk.Label(label="Must be run as root!")
-            label.set_alignment(0.0,0.0)
-            page.add(label)
-        else:
-            webView = WebKit2.WebView()
-            webView.load_uri("https://www.tuxconfig.com")
-            page.add(webView)
-        page.show_all()
-        return page
-
-    def CreatorPage(self,device):
-        page = Gtk.VBox(homogeneous=False, spacing=0)
-        page.set_border_width(10)
-
-
-        webView = WebKit2.WebView()
-        webView.load_uri("https://www.tuxconfig.com/user/get_contributor/" + str(device.pk))
-        page.add(webView)
-        page.show_all()
-        return page
-
-
-    def InstallPage(self, device):
-        page = Gtk.VBox(homogeneous=False, spacing=0)
-        page.set_border_width(10)
-        grid = Gtk.Grid()
-        label = Gtk.Label(label=device.getString())
-        label.set_alignment(0.0,0.0)
-        grid.attach(label,0,0,1,1)
-        update = Gtk.Label(label="Install details")
-        update.set_alignment(0.0,0.0)
-        grid.attach(update,0,1,1,1)
-        result_label = Gtk.Label(label="")
-        result_label.set_alignment(0.0,0.0)
-        grid.attach(result_label,0,2,1,1)
-
-
-        def run_install_thread(button,device):
-            thread = threading.Thread(target=example_target)
-            thread.daemon = True
-            thread.start()
-            result = run_install(None,device)
-            if result is True:
-                device.successsuccess = True
-                result_label.set_markup("<span color='green'>{} </span>".format("Device installed successfully"))
-                MyWindow.set_about_page(device)
-            else:
-                device.success = False
-                result_label.set_markup("<span color='red'>{} </span>".format("Device install failed"))
-            write_to_file(device)
-
-
-
-
-        if device.tried:
-            button = Gtk.Button.new_with_label("try next")
-            button.connect("clicked", run_install_thread,device)
-            grid.attach(button,0,3,1,1)
-            button = Gtk.Button.new_with_label("remove")
-            button.connect("clicked", run_install_thread,device)
-            grid.attach(button,0,4,1,1)
-        else:
-            button = Gtk.Button.new_with_label("install")
-            button.connect("clicked", run_install_thread,device)
-            grid.attach(button,0,3,1,1)
-        page.add(grid)
-
-
-
-        def update_progess():
-            GLib.idle_add(update.set_text,InstallUpdates.result + "\n")
-
-
-            return False
-
-        def example_target():
-            while True:
-                GLib.idle_add(update_progess)
-                time.sleep(0.2)
-
-
-        return page
 
     device_map = []
 
     def DevicePage(self):
-        page = Gtk.VBox(homogeneous=False, spacing=0)
-        page.set_border_width(10)
+        page = Gtk.VBox()
         grid = Gtk.Grid()
         devices = []
         pci_devices = find_device_ids("pci")
@@ -145,23 +178,21 @@ class MyWindow(Gtk.Window):
         for device_available in devices:
             for a in device_available.values():
                 label = Gtk.Label(label=a.getString())
-                label.set_alignment(0.0,0.0)
-                grid.attach(label,0,row,1,1)
+                label.set_alignment(0.0, 0.0)
+                grid.attach(label, 0, row, 1, 1)
                 a.get_repository_details()
                 if a.available:
-
                     button = Gtk.Button.new_with_label("install options")
-                    button.connect("clicked", self.set_install_page,a)
-                    grid.attach(button,1,row,1,1)
+                    button.connect("clicked", self.set_install_page, a)
+                    grid.attach(button, 1, row, 1, 1)
 
                 row += 1
 
-        page.add(grid)
-        page.show_all()
         return page
 
+
 win = MyWindow()
-win.set_default_size(800,600)
+win.set_default_size(800, 600)
 win.connect("destroy", Gtk.main_quit)
 win.show_all()
 Gtk.main()

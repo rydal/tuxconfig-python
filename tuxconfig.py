@@ -13,12 +13,17 @@ from json import JSONDecodeError
 from pathlib import Path
 
 import requests
+import socket
 
+from gi.repository import GObject
+
+install_success = False
+install_failed = False
 class InstallUpdates:
     result = ""
     completed = 0
 
-def run_install(button,device):
+def run_install(device):
 
     directory = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
     print ("cloning repository")
@@ -106,7 +111,7 @@ def run_install(button,device):
 
 def find_device_ids(type):
     devices = {}
-    for file in os.listdir("/sys/bus/" + type + "/devices"):
+    for file in os.listdir("/sys/bus/" + type + "/devices/[0-9]*/"):
 
         result = subprocess.check_output(
             ["udevadm", "info", os.path.join("/sys/bus/" + type + "/devices/", file)]).decode(
@@ -128,7 +133,7 @@ def find_device_ids(type):
             if line.startswith("PCI_ID=") and type == "pci":
                 pci_id = line[7:len(line)]
                 pci_id_array = pci_id.split(":")
-                if len(pci_id_array) >= 2:
+                if len(pci_id_array) == 2:
                     device_id = pad_ids(pci_id_array[0])
                     vendor_id = pad_ids(pci_id_array[1])
                 if len(pci_id_array) == 3:
@@ -219,10 +224,10 @@ class device_details:
     def setCommit(self, commit):
         self.commit = commit
 
-    def get_repository_details(self ):
+    def get_repository_details(self):
         response = requests.get(
             'https://www.tuxconfig.com/user/get_device/' + self.vendor_id + ":" + self.device_id + "/" + get_platform())
-        if response.status_code >= 400 and response.status_code < 400:
+        if response.status_code >= 400 and response.status_code < 404:
             print ("connection error")
             return False
         elif response.status_code >= 500:
@@ -239,19 +244,23 @@ class device_details:
 
 
                     current_repository = json_response[0]
-
-                    for repository in json_response:
+                    drivers_available = 0
+                    for repository in current_repository:
                         if repository['stars'] > current_repository['stars']:
                             current_repository = repository
-                        if already_installed(current_repository['clone_url'],current_repository['commit']):
-                            print("Trying next favoured install for " + self.device_vendor + " " + self.device_name)
+
+
 
                         self.available = True
                         self.clone_url = current_repository['clone_url']
                         self.commit = current_repository['commit']
                         self.stars = current_repository['stars']
                         self.pk = current_repository['pk']
-                    return current_repository
+                        drivers_available += 1
+                        self = already_installed(self)
+                        if device.tried:
+                            print("Trying next favoured install for " + self.device_vendor + " " + self.device_name)
+                    return current_repository,drivers_available
             except JSONDecodeError:
                 print("cannot parse server request")
                 return False
@@ -311,28 +320,50 @@ def get_device_installed_list(module_name):
             return package_details[0] + "/" + package_details[1].strip()
     return False
 
-def already_installed(clone_url,commit):
+def already_installed(device):
     tuxconfig_file  = Path('/var/lib/tuxconfig.log')
     if tuxconfig_file.is_file():
         with open('/var/lib/tuxconfig.log') as file:
             for line in file:
                 checking_device = json.loads(line)
-                if checking_device['clone_url'] == clone_url and checking_device['commit'] == commit:
+                if checking_device['clone_url'] == device.clone_url and checking_device['commit'] == device.commit:
                     if checking_device['tried'] is True:
-                        print("Install attempted and failed")
-                    else:
-                        print("Install not attempted")
+                        device.tried = True
                     if checking_device['success'] is True:
-                        print("Install marked as successful")
+                        device.success = True
                     else:
                         print("Install marked as unsuccessful")
-                    if checking_device['tried'] is True and  checking_device['success'] is True:
-                        return True
-
-    return False
 
 
+    return device
 
+def check_connected():
+    IPaddress=socket.gethostbyname(socket.gethostname())
+    if IPaddress=="127.0.0.1":
+        print("Internet not connected.")
+        return False
+    else:
+        return True
+
+import signal
+
+def handler(signum):
+    my_obj = GObject.GObject
+    if signum == signal.SIGUSR1:
+        my_obj.emit(GObject, 42)
+    elif signum == signal.SIGUSR1:
+        my_obj.emit(GObject, 42)
+
+signal.signal(signal.SIGUSR1, handler)
+signal.signal(signal.SIGUSR2, handler)
+def get_repository_details(usb_vendor_id,usb_device_id):
+    response = requests.get('https://www.tuxconfig.com/user/get_device/' + usb_vendor_id + ":" + usb_device_id + "/" + get_platform())
+    if response.status_code >= 400 and response.status_code < 404:
+        print ("connection error")
+        return False
+    elif response.status_code >= 500:
+        print("server error")
+        return False
 
 if __name__ == '__main__':
 
@@ -348,16 +379,16 @@ if __name__ == '__main__':
     index = 0
     device_map = []
 
-    empty_list = False
+    empty_list = True
     for device in devices:
         for a in device.values():
             error = a.get_repository_details()
             if a.available:
-                empty_list = True
-                device_map.append( a)
+                empty_list = False
+                device_map.append(a)
                 index += 1
                 print(str(index) + ") " + a.getString() + "\ninstallable from www.tuxconfig.com")
-    if empty_list is False:
+    if empty_list is True:
         print("No more drivers available for this device")
         exit(2)
 
@@ -382,7 +413,7 @@ if __name__ == '__main__':
             try_install = 1
         device_to_install = device_map[ int(try_install) - 1 ]
         device_to_install.tried= True
-        install_result = run_install(None,device_to_install)
+        install_result = run_install(device_to_install)
         if install_result is True:
             device_to_install.success = True
             set_git_commit = subprocess.Popen(["xdg-open", "https://www.tuxconfig.com/user/get_contributor/" + str(device_to_install.pk) ],stdout=subprocess.PIPE)
