@@ -24,6 +24,7 @@ except:
 import urllib.request  # python < 3.0
 
 global current_device
+global beta_mode
 
 
 
