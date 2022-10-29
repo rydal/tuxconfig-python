@@ -1,8 +1,9 @@
 #!/usr/bin/python3
 import datetime
+import fnmatch
 import json
 import os
-import platform
+from cpuinfo import get_cpu_info
 import random
 import string
 import subprocess
@@ -23,95 +24,10 @@ class InstallUpdates:
     result = ""
     completed = 0
 
-def run_install(device):
-
-    directory = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
-    print ("cloning repository")
-    InstallUpdates.result += "cloning repository\n"
-    clone_git = subprocess.Popen(["git", "clone", device.clone_url, "/tmp/" + directory], stdout=subprocess.PIPE)
-    streamdata = clone_git.communicate()[0]
-    InstallUpdates.result += str(streamdata,"utf-8") +  "\n"
-    InstallUpdates.completed += 1
-
-
-    if clone_git.returncode > 0:
-        return  "Error cloning git repo"
-
-
-    print ("Reseting git head")
-    InstallUpdates.result += "Reseting git head\n"
-    set_git_commit = subprocess.Popen(["git", "reset", "--hard", device.commit], cwd='/tmp/' + directory,
-                                      stdout=subprocess.PIPE)
-    streamdata = set_git_commit.communicate()[0]
-    InstallUpdates.result += str(streamdata,"utf-8") +  "\n"
-    InstallUpdates.completed += 1
-
-    if set_git_commit.returncode > 0:
-        return  "Error setting Git branch"
-
-
-    if not os.path.exists("/tmp/" + directory + "/tuxconfig.conf"):
-        return "Tuxconfig file not in directory"
-
-
-    install_command = None
-    test_command = None
-    module_name = None
-
-    with open("/tmp/" + directory + "/tuxconfig.conf", encoding="UTF-8") as tuxconfig_file:
-        lines = tuxconfig_file.readlines()
-        for index, line in enumerate(lines):
-            line = line.replace("\n", "")
-            line = line.replace("\"", "")
-            if "install_command" in line:
-                line.split("=")
-                install_command = line.split("=")[1].strip("\"")
-            if "test_command" in line:
-                line.split("=")
-                test_command = line.split("=")[1].strip("\"")
-            if "module_id" in line:
-                line.split("=")
-                module_name = line.split("=")[1].strip("\"")
-    installed = get_device_installed_list(module_name)
-    if installed is True:
-        print ("Uninstalling current module")
-        InstallUpdates.result += "Uninstalling current module\n"
-        uninstall = subprocess.Popen(["dmks", "remove", installed + "--all"], cwd='/tmp/' + directory,
-                                          stdout=subprocess.PIPE)
-        streamdata = uninstall.communicate()[0]
-        InstallUpdates.result += str(streamdata,"utf-8") +  "\n"
-        InstallUpdates.completed += 1
-
-    print ("installing module, takes some time.")
-    if install_command.startswith("./"):
-        install_command = install_command[2:len(install_command)]
-
-    install_module = subprocess.Popen(["/tmp/" + directory + "/" + install_command], stdout=subprocess.PIPE,
-                                      cwd="/tmp/" + directory)
-
-    streamdata = install_module.communicate()[0]
-    InstallUpdates.result += str(streamdata,"utf-8") +  "\n"
-    InstallUpdates.completed += 1
-
-    if install_module.returncode > 0:
-        return "Error installing module"
-
-    test_module = subprocess.Popen(["bash",test_command], stdout=subprocess.PIPE,
-                                   cwd="/tmp/" + directory)
-    streamdata = test_module.communicate()[0]
-    InstallUpdates.result += str(streamdata,"utf-8") +  "\n"
-    InstallUpdates.completed += 1
-
-    if test_module.returncode > 0:
-        return "Error testing module"
-
-    print("Module installed!")
-    return True
-
 
 def find_device_ids(type):
     devices = {}
-    for file in os.listdir("/sys/bus/" + type + "/devices/[0-9]*/"):
+    for file in  os.listdir("/sys/bus/" + type + "/devices/"):
 
         result = subprocess.check_output(
             ["udevadm", "info", os.path.join("/sys/bus/" + type + "/devices/", file)]).decode(
@@ -182,9 +98,9 @@ def pad_ids(usb_id):
 
 
 def get_platform():
-    if platform.processor() == "i386":
+    if get_cpu_info()['arch'] == "i386":
         return "i386"
-    elif platform.processor() == "x86_64":
+    elif get_cpu_info()['arch'] == "X86_64":
         return "x86_64"
     else:
         with open('/proc/cpuinfo') as f:
@@ -257,7 +173,7 @@ class device_details:
                         self.stars = current_repository['stars']
                         self.pk = current_repository['pk']
                         drivers_available += 1
-                        self = already_installed(self)
+                        self.already_installed = already_installed(self)
                         if device.tried:
                             print("Trying next favoured install for " + self.device_vendor + " " + self.device_name)
                     return current_repository,drivers_available
@@ -281,10 +197,13 @@ class device_details:
         self.tried = False
         self.success = False
         self.available = False
+        self.already_installed = False
 
     def getString(self):
         return self.vendor_id + ":" + self.device_id + " " +  self.device_vendor + " " + self.device_name + "\n"
 
+    def getDeviceId(self):
+        return self.vendor_id + ":" + self.device_id + " " +  self.device_vendor
     def getAvailable(self):
         return self.available
 
@@ -294,6 +213,114 @@ class device_details:
     def getCloneUrl(self):
         return self.clone_url
 
+
+def detect_desktop_environment():
+    desktop_environment = 'generic'
+    if os.environ.get('KDE_FULL_SESSION') == 'true':
+        desktop_environment = 'kde'
+    elif os.environ.get('GNOME_DESKTOP_SESSION_ID'):
+        desktop_environment = 'gnome'
+    else:
+        try:
+            info = subprocess.getoutput('xprop -root _DT_SAVE_MODE')
+            if ' = "xfce4"' in info:
+                desktop_environment = 'xfce'
+        except (OSError, RuntimeError):
+            pass
+    return desktop_environment
+
+def run_install(device):
+    if detect_desktop_environment() == "gnome" or  detect_desktop_environment() == "xfce" :
+        subprocess.call(['gksudo',join(os.getcwd(),'install_device.py')])
+    elif detect_desktop_environment() == "kde":
+        subprocess.call(['kdesu',join(os.getcwd(),'install_device.py')])
+    else:
+        root_pw = subprocess.Popen(["/bin/sh", "su"],
+                                   stdout=subprocess.PIPE,
+                                   encoding="utf-8")
+        print(root_pw.stdout.read())
+    directory = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
+    print ("cloning repository")
+    InstallUpdates.result += "cloning repository\n"
+    clone_git = subprocess.Popen(["git", "clone", device.clone_url, "/tmp/" + directory], stdout=subprocess.PIPE)
+    streamdata = clone_git.communicate()[0]
+    InstallUpdates.result += str(streamdata,"utf-8") +  "\n"
+    InstallUpdates.completed += 1
+
+
+    if clone_git.returncode > 0:
+        return  "Error cloning git repo"
+
+
+    print ("Reseting git head")
+    InstallUpdates.result += "Reseting git head\n"
+    set_git_commit = subprocess.Popen(["git", "reset", "--hard", device.commit], cwd='/tmp/' + directory,
+                                      stdout=subprocess.PIPE)
+    streamdata = set_git_commit.communicate()[0]
+    InstallUpdates.result += str(streamdata,"utf-8") +  "\n"
+    InstallUpdates.completed += 1
+
+    if set_git_commit.returncode > 0:
+        return  "Error setting Git branch"
+
+
+    if not os.path.exists("/tmp/" + directory + "/tuxconfig.conf"):
+        return "Tuxconfig file not in directory"
+
+
+    install_command = None
+    test_command = None
+    module_name = None
+
+    with open("/tmp/" + directory + "/tuxconfig.conf", encoding="UTF-8") as tuxconfig_file:
+        lines = tuxconfig_file.readlines()
+        for index, line in enumerate(lines):
+            line = line.replace("\n", "")
+            line = line.replace("\"", "")
+            if "install_command" in line:
+                line.split("=")
+                install_command = line.split("=")[1].strip("\"")
+            if "test_command" in line:
+                line.split("=")
+                test_command = line.split("=")[1].strip("\"")
+            if "module_id" in line:
+                line.split("=")
+                module_name = line.split("=")[1].strip("\"")
+    installed = get_device_installed_list(module_name)
+    if installed is True:
+        print ("Uninstalling current module")
+        InstallUpdates.result += "Uninstalling current module\n"
+        uninstall = subprocess.Popen(["dmks", "remove", installed + "--all"], cwd='/tmp/' + directory,
+                                     stdout=subprocess.PIPE)
+        streamdata = uninstall.communicate()[0]
+        InstallUpdates.result += str(streamdata,"utf-8") +  "\n"
+        InstallUpdates.completed += 1
+
+    print ("installing module, takes some time.")
+    if install_command.startswith("./"):
+        install_command = install_command[2:len(install_command)]
+
+    install_module = subprocess.Popen(["/tmp/" + directory + "/" + install_command], stdout=subprocess.PIPE,
+                                      cwd="/tmp/" + directory)
+
+    streamdata = install_module.communicate()[0]
+    InstallUpdates.result += str(streamdata,"utf-8") +  "\n"
+    InstallUpdates.completed += 1
+
+    if install_module.returncode > 0:
+        return "Error installing module"
+
+    test_module = subprocess.Popen(["bash",test_command], stdout=subprocess.PIPE,
+                                   cwd="/tmp/" + directory)
+    streamdata = test_module.communicate()[0]
+    InstallUpdates.result += str(streamdata,"utf-8") +  "\n"
+    InstallUpdates.completed += 1
+
+    if test_module.returncode > 0:
+        return "Error testing module"
+
+    print("Module installed!")
+    return True
 
 def write_to_file(device):
     f = open("/var/lib/tuxconfig.log", "w+")
