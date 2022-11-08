@@ -278,12 +278,33 @@ class MyWindow(Gtk.Window):
                         success_label = Gtk.Label(label="Device unsuccessfully installed on this machine")
                         success_label.override_color(Gtk.StateFlags.NORMAL, Gdk.RGBA(0.0, 1.0, 0.0, 0.0))
                     self.grid.attach(success_label, 0, 0, 1, 1)
+                self.update_spinner_array = []
+                self.array_pointer = 0
 
 
 
             def run_install(self):
                 self.device.install_device()
-                
+
+            def add_update_progress(self):
+                while True:
+                    if self.device.installed_status > self.array_pointer:
+                        box = Gtk.Box()
+                        label = Gtk.Label(label= tuxconfig.get_module_install_status(self.device.installed_status))
+                        spinner = Gtk.Spinner()
+                        spinner.start()
+                        self.update_spinner_array.append(spinner)
+                        box.pack_start(label,expand=False,padding=1,fill=False)
+                        box.pack_end(
+                            self.update_spinner_array[self.array_pointer],expand=False,padding=1,fill=False)
+                        self.array_pointer += 1
+                        self.grid.attach(box, 0, 0, 1, 1)
+                    for i in range(len(self.update_spinner_array) -1):
+                        self.update_spinner_array[i].stop()
+
+                    time.sleep(0.1)
+
+
 
 
 

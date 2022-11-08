@@ -138,6 +138,7 @@ class device_details:
         self.already_installed = False
         self.installed_status = 0
         self.install_directory = None
+        self.beta = False
     def setName(self, device_name):
         self.device_name = device_name
 
@@ -166,8 +167,12 @@ class device_details:
         self.commit = commit
 
     def get_repository_details(self):
+        if self.beta is True:
+            beta = "true"
+        else:
+            beta = "false"
         response = requests.get(
-            'https://www.tuxconfig.com/user/get_device/' + self.vendor_id + ":" + self.device_id + "/" + get_platform())
+            'https://www.tuxconfig.com/user/get_device/' + self.vendor_id + ":" + self.device_id + "/" + get_platform() + "/" + beta)
         if response.status_code >= 400 and response.status_code < 404:
             print("connection error")
             return False
@@ -331,10 +336,6 @@ class device_details:
     def getCloneUrl(self):
         return self.clone_url
 
-    def toJson(self):
-        return json.dumps({"vendor_id" : self.vendor_id,"device_id" : self.device_id, "revision" : self.revision, "device_name" : self.device_name, "device_vendor" : self.device_vendor, "driver" : self.driver,
-                    "subsystem" : self.subsystem, "clone_url" : self.clone_url, "commit" : self.commit, "stars" : self.stars, "pk" : self.pk, "tried" : self.tried, "success" : self.success, "available" : self.available,
-                    "already_installed" : self.already_installed, "installed_status" : self.installed_status, "install_directory" : self.install_directory })
 
 
 
