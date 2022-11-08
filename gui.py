@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 
 import gi
 import gtk
+from gi.overrides import Gdk
 
 from gi.repository.GLib import Thread
 
@@ -26,6 +27,22 @@ import urllib.request  # python < 3.0
 global current_device
 global beta_mode
 
+
+
+def detect_desktop_environment():
+    desktop_environment = 'generic'
+    if os.environ.get('KDE_FULL_SESSION') == 'true':
+        desktop_environment = 'kde'
+    elif os.environ.get('GNOME_DESKTOP_SESSION_ID'):
+        desktop_environment = 'gnome'
+    else:
+        try:
+            info = subprocess.getoutput('xprop -root _DT_SAVE_MODE')
+            if ' = "xfce4"' in info:
+                desktop_environment = 'xfce'
+        except (OSError, RuntimeError):
+            pass
+    return desktop_environment
 
 
 def can_i_haz_internet(host='https://google.com'):
@@ -62,7 +79,7 @@ class MyWindow(Gtk.Window):
         self.add(scrolled_window)
         self.about_page = self.AboutPage()
         self.device_page = self.DevicePage()
-        self.install_page = self.InstallPage()
+        self.install_page = self.ShowInstallableDevices()
         self.creator_page = self.CreatorPage()
         self.request_page = self.RequestPage()
         self.notebook.append_page(self.about_page.box, Gtk.Label(label="About tuxconfig"))
@@ -166,7 +183,7 @@ class MyWindow(Gtk.Window):
             self.box.show_all()
 
 
-    class InstallPage():
+    class ShowInstallableDevices:
 
         def __init__(self):
             self.result = 0
@@ -193,14 +210,14 @@ class MyWindow(Gtk.Window):
             self.grid.add(self.terminal)
             if current_device.tried:
                 button = Gtk.Button.new_with_label("try next driver")
-                button.connect("clicked", tuxconfig.run_install, current_device)
+                button.connect("clicked", self.run_install, current_device)
                 self.grid.attach(button, 0, 3, 1, 1)
                 button = Gtk.Button.new_with_label("remove driver")
-                button.connect("clicked", tuxconfig.run_install, current_device)
+                button.connect("clicked", self.run_install, current_device)
                 self.grid.attach(button, 0, 4, 1, 1)
             else:
                 button = Gtk.Button.new_with_label("install driver")
-                button.connect("clicked", tuxconfig.run_install, current_device)
+                button.connect("clicked", self.run_install, current_device)
                 self.grid.attach(button, 0, 3, 1, 1)
 
             self.grid.show_all()
@@ -212,6 +229,65 @@ class MyWindow(Gtk.Window):
             elif self.install_failed:
                 self.result.set_markup("<span color='red'>{} </span>".format("Device install failed"))
 
+        class InstallDevice:
+
+            def __init__(self,device):
+                self.device = device
+                self.result = 0
+                self.install_success = None
+                self.install_failed = None
+                self.box = Gtk.Box()
+                self.grid = Gtk.Grid()
+                if os.geteuid() != 0:
+                    run_as_root_label  = Gtk.Label(label="This app must be run as root to install devices")
+                    run_as_root_label.set_hexpand(True)
+                    self.grid.attach(run_as_root_label, 0, 0, 1, 1)
+                else:
+                    device_id_label = Gtk.Label(label="Device id: " + device.getDeviceId())
+                    self.grid.attach(device_id_label, 0, 0, 1, 1)
+                    revision_label = Gtk.Label(label="Revision: " + device.revision)
+                    self.grid.attach(revision_label, 0, 0, 1, 1)
+                    device_name_label = Gtk.Label(label="Device name: " + device.device_vendor_label)
+                    self.grid.attach(device_name_label, 0, 0, 1, 1)
+                    vendor_name_label = Gtk.Label(label="Device vendor: " + device.vendor_name_label)
+                    self.grid.attach(vendor_name_label, 0, 0, 1, 1)
+                    driver_label = Gtk.Label(label="Module driver name: " + device.driver)
+                    self.grid.attach(driver_label, 0, 0, 1, 1)
+                    if device.subsystem == "usb":
+                        subsystem_label = Gtk.Label(label="USB device")
+                    elif device.subsystem == "pci":
+                        subsystem_label = Gtk.Label(label="PCI device")
+                    else:
+                        subsystem_label = Gtk.Label(label="Other device")
+                    self.grid.attach(subsystem_label, 0, 0, 1, 1)
+                    github_url_label = Gtk.LinkButton(device.clone_url, label="Github repository url")
+                    self.grid.attach(github_url_label, 0, 0, 1, 1)
+                    stars_label = Gtk.Label(label="Github stars awarded: " + device.stars )
+                    self.grid.attach(stars_label, 0, 0, 1, 1)
+                    if device.tried:
+                        tried_label = Gtk.Label(label="Device tried before on this machine")
+                        tried_label.override_color(Gtk.StateFlags.NORMAL, Gdk.RGBA(0.0, 1.0, 0.0, 0.0))
+                    else:
+                        tried_label = Gtk.Label(label="Device not tried on this machine")
+                        tried_label.override_color(Gtk.StateFlags.NORMAL, Gdk.RGBA(0.0, 0.0, 0.0, 1.0))
+                    self.grid.attach(tried_label, 0, 0, 1, 1)
+                    if device.success:
+                        success_label = Gtk.Label(label="Device successfully installed on this machine")
+                        success_label.override_color(Gtk.StateFlags.NORMAL, Gdk.RGBA(0.0, 0.0, 1.0, 0.0))
+                    else:
+                        success_label = Gtk.Label(label="Device unsuccessfully installed on this machine")
+                        success_label.override_color(Gtk.StateFlags.NORMAL, Gdk.RGBA(0.0, 1.0, 0.0, 0.0))
+                    self.grid.attach(success_label, 0, 0, 1, 1)
+
+
+
+            def run_install(self):
+                self.device.install_device()
+                
+
+
+
+Gtk.main()
 
 win = MyWindow()
 win.set_default_size(800, 600)

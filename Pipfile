@@ -11,6 +11,7 @@ pygobject-stubs = "*"
 pyte = "*"
 vte = "*"
 py-cpuinfo = "*"
+dbus-python = "*"
 
 [dev-packages]
 
