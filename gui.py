@@ -120,6 +120,8 @@ class MyWindow(Gtk.Window):
             self.install_failed = None
             self.token = None
             self.grid = Gtk.Grid()
+            self.usb_modules_available = tuxconfig.get_modules_available(tuxconfig.find_device_ids('usb'))
+            self.pci_modules_available = tuxconfig.get_modules_available(tuxconfig.find_device_ids('pci'))
 
             self.consent_label = Gtk.Label(label="Search for available models using this program, this will upload the identifiers of your USB and PCI devices")
             self.grid.attach(self.consent_label,True,True,1,1)
@@ -138,14 +140,11 @@ class MyWindow(Gtk.Window):
             label.set_markup("<b>USB devices:</b>")
             self.grid.attach(label,0,1,1,1)
             device_index = 1
-            for device in tuxconfig.find_device_ids('pci'):
-                row = Gtk.ListBoxRow()
+            for device in tuxconfig.find_device_ids('usb'):
                 hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=50)
                 label = Gtk.Label(label=device.getString())
                 label.set_alignment(0.0, 0.0)
                 hbox.pack_start(label, True,True, 1)
-
-
                 if device.tried:
                     button = Gtk.Button.new_with_label("try next driver")
                     button.connect("clicked", self.run_install, device)
@@ -153,19 +152,17 @@ class MyWindow(Gtk.Window):
                     button = Gtk.Button.new_with_label("remove driver")
                     button.connect("clicked", self.run_install, device)
                     hbox.pack_start(button, True,True, 1)
-
-                if device.available:
+                if device.getString() in tuxconfig.InstallUpdates.device_array:
                     button = Gtk.Button.new_with_label("install driver")
                     button.connect("clicked", self.run_install, device)
                     hbox.pack_start(button, True,True, 1)
                 else:
                     label = Gtk.Label()
                     label.set_markup("Not available")
-                    label.set_alignment(1, 0.0)
                     hbox.pack_end(label, True,True, 1)
-                row.add(hbox)
-                self.grid.attach(row,0,device_index,1,1)
+                self.grid.attach(hbox,0,device_index,1,1)
                 device_index = device_index + 1
+
 
             label = Gtk.Label()
             label.set_markup("USB devices:")
@@ -184,20 +181,15 @@ class MyWindow(Gtk.Window):
                     button = Gtk.Button.new_with_label("remove driver")
                     button.connect("clicked", self.run_install, device)
                     hbox.pack_start(button, True,True, 1)
-                    self.grid.attach(hbox,0,device_index,2,1)
-                if device.available:
+                if device.getString() in tuxconfig.InstallUpdates.device_array:
                     button = Gtk.Button.new_with_label("install driver")
                     button.connect("clicked", self.run_install, device)
                     hbox.pack_start(button, True,True, 1)
-                    self.grid.attach(hbox,0,device_index,2,1)
-
                 else:
                     label = Gtk.Label()
                     label.set_markup("Not available")
-                    label.set_alignment(1, 0.0)
-                    self.grid.attach(label,0,device_index,3,1)
-
-                self.grid.attach(hbox,0,device_index,2,1)
+                    hbox.pack_end(label, True,True, 1)
+                self.grid.attach(hbox,0,device_index,1,1)
                 device_index = device_index + 1
 
 

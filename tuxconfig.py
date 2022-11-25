@@ -28,7 +28,7 @@ install_failed = False
 class InstallUpdates:
     result = ""
     completed = 0
-
+    device_array = []
 
 
 def pad_ids(usb_id):
@@ -51,6 +51,24 @@ def get_platform():
         return hardware_id
 
 import threading
+
+def get_modules_available(device_array,recaptcha_token):
+    device_string = []
+
+    for device in device_array:
+        device_string.append(device.getDeviceString())
+    device_array.append({"recaptcha_token" : recaptcha_token})
+    response = requests.post(
+        'https://www.tuxconfig.com/user/get_device_available/',json=json.dumps(device_string))
+    if response.status_code >= 400 and response.status_code < 404:
+        print("connection error")
+        return []
+    elif response.status_code >= 500:
+        print("server error")
+        return []
+    result = json.loads(response.content)
+    InstallUpdates.device_array = result
+    return result
 
 class device_details:
 
@@ -100,6 +118,7 @@ class device_details:
 
     def setCommit(self, commit):
         self.commit = commit
+
 
     def get_repository_details(self):
 
@@ -256,7 +275,7 @@ class device_details:
     def getString(self):
         return self.vendor_id + ":" + self.device_id + " " + self.device_vendor + " " + self.device_name + "\n"
 
-    def getDeviceId(self):
+    def getDeviceString(self):
         return self.vendor_id + ":" + self.device_id
 
     def getAvailable(self):
