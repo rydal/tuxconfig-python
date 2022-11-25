@@ -12,6 +12,7 @@ pyte = "*"
 vte = "*"
 py-cpuinfo = "*"
 dbus-python = "*"
+librecaptcha = "*"
 
 [dev-packages]
 

@@ -30,71 +30,6 @@ class InstallUpdates:
     completed = 0
 
 
-def find_device_ids(type):
-    devices = {}
-    for file in os.listdir("/sys/bus/" + type + "/devices/"):
-
-        result = subprocess.check_output(
-            ["udevadm", "info", os.path.join("/sys/bus/" + type + "/devices/", file)]).decode(
-            "utf-8").split("\n")
-        device_id = None
-        vendor_id = None
-        revision = None
-        model_vendor = None
-        model_name_id = None
-        model_name = None
-        driver = None
-        subsystem = None
-        for line in result:
-            line = line[3:len(line)]
-            if line.startswith("DRIVER="):
-                driver = line[7:len(line)]
-            if line.startswith("PRODUCT="):
-                product = line[12:len(line)]
-            if line.startswith("PCI_ID=") and type == "pci":
-                pci_id = line[7:len(line)]
-                pci_id_array = pci_id.split(":")
-                if len(pci_id_array) == 2:
-                    device_id = pad_ids(pci_id_array[0])
-                    vendor_id = pad_ids(pci_id_array[1])
-                if len(pci_id_array) == 3:
-                    revision = pad_ids(pci_id_array[2])
-            if line.startswith("PRODUCT=") and type == "usb":
-                pci_id = line[8:len(line)]
-                pci_id_array = pci_id.split("/")
-                if len(pci_id_array) >= 2:
-                    device_id = pad_ids(pci_id_array[0])
-                    vendor_id = pad_ids(pci_id_array[1])
-                if len(pci_id_array) == 3:
-                    revision = pad_ids(pci_id_array[2])
-            if line.startswith("ID_MODEL="):
-                model_name_id = line[9:len(line)]
-            if line.startswith("ID_MODEL_FROM_DATABASE="):
-                model_name = line[23:len(line)]
-            if line.startswith("ID_VENDOR_FROM_DATABASE="):
-                model_vendor = line[24:len(line)]
-            if line.startswith("SUBSYSTEM="):
-                subsystem = line[10:len(line)]
-        if device_id is not None and vendor_id is not None:
-            device = device_details()
-            device.setDeviceId(device_id)
-            device.setVendorId(vendor_id)
-            device.setVendor(model_vendor)
-            if model_name_id is None and model_name is None:
-                continue
-            elif model_name_id is not None and model_name is None:
-                device.setName(model_name_id)
-            elif model_name is not None and model_name_id is None:
-                device.setName(model_name)
-            elif model_name is not None and model_name_id is not None:
-                device.setName(model_name)
-            device.setRevision(revision)
-            device.setDriver(driver)
-            device.setSubsystem(subsystem)
-            devices[str(device_id + ":" + vendor_id)] = device
-
-    return devices
-
 
 def pad_ids(usb_id):
     while len(usb_id) < 4:
@@ -138,7 +73,7 @@ class device_details:
         self.already_installed = False
         self.installed_status = 0
         self.install_directory = None
-        self.beta = False
+
     def setName(self, device_name):
         self.device_name = device_name
 
@@ -167,12 +102,9 @@ class device_details:
         self.commit = commit
 
     def get_repository_details(self):
-        if self.beta is True:
-            beta = "true"
-        else:
-            beta = "false"
+
         response = requests.get(
-            'https://www.tuxconfig.com/user/get_device/' + self.vendor_id + ":" + self.device_id + "/" + get_platform() + "/" + beta)
+            'https://www.tuxconfig.com/user/get_device/' + self.vendor_id + ":" + self.device_id)
         if response.status_code >= 400 and response.status_code < 404:
             print("connection error")
             return False
@@ -180,10 +112,10 @@ class device_details:
             print("server error")
             return False
         else:
+            print (response.content.decode('utf-8'))
             try:
                 string = response.content.decode('utf-8')
                 json_response = json.loads(string)
-
                 if "none" in json_response:
                     self.available = False
                 else:
@@ -242,7 +174,7 @@ class device_details:
         streamdata = uninstall.communicate()[0]
         append_to_logfile(str(streamdata, "utf-8") + "\n",self.install_directory,self.driver)
 
-    def install_device(self):
+    def install_module(self):
         self.install_directory = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
 
         clone_git = subprocess.Popen(["git", "clone", device.clone_url, "/tmp/" + self.install_directory], stdout=subprocess.PIPE)
@@ -425,29 +357,90 @@ def check_connected():
 
 
 
+def find_device_ids(type):
+    device_list = []
+    for file in os.listdir("/sys/bus/" + type + "/devices/"):
 
+        result = subprocess.check_output(
+            ["udevadm", "info", os.path.join("/sys/bus/" + type + "/devices/", file)]).decode(
+            "utf-8").split("\n")
+        device_id = None
+        vendor_id = None
+        revision = None
+        model_vendor = None
+        model_name_id = None
+        model_name = None
+        driver = None
+        subsystem = None
+        for line in result:
+            line = line[3:len(line)]
+            if line.startswith("DRIVER="):
+                driver = line[7:len(line)]
+            if line.startswith("PRODUCT="):
+                product = line[12:len(line)]
+            if line.startswith("PCI_ID=") and type == "pci":
+                pci_id = line[7:len(line)]
+                pci_id_array = pci_id.split(":")
+                if len(pci_id_array) == 2:
+                    device_id = pad_ids(pci_id_array[0])
+                    vendor_id = pad_ids(pci_id_array[1])
+                if len(pci_id_array) == 3:
+                    revision = pad_ids(pci_id_array[2])
+            if line.startswith("PRODUCT=") and type == "usb":
+                pci_id = line[8:len(line)]
+                pci_id_array = pci_id.split("/")
+                if len(pci_id_array) >= 2:
+                    device_id = pad_ids(pci_id_array[0])
+                    vendor_id = pad_ids(pci_id_array[1])
+                if len(pci_id_array) == 3:
+                    revision = pad_ids(pci_id_array[2])
+            if line.startswith("ID_MODEL="):
+                model_name_id = line[9:len(line)]
+            if line.startswith("ID_MODEL_FROM_DATABASE="):
+                model_name = line[23:len(line)]
+            if line.startswith("ID_VENDOR_FROM_DATABASE="):
+                model_vendor = line[24:len(line)]
+            if line.startswith("SUBSYSTEM="):
+                subsystem = line[10:len(line)]
+        if device_id is not None and vendor_id is not None:
+            device = device_details()
+            device.setDeviceId(device_id)
+            device.setVendorId(vendor_id)
+            device.setVendor(model_vendor)
+            if model_name_id is None and model_name is None:
+                continue
+            elif model_name_id is not None and model_name is None:
+                device.setName(model_name_id)
+            elif model_name is not None and model_name_id is None:
+                device.setName(model_name)
+            elif model_name is not None and model_name_id is not None:
+                device.setName(model_name)
+            device.setRevision(revision)
+            device.setDriver(driver)
+            device.setSubsystem(subsystem)
+            device_list.append(device)
+
+    return device_list
 
 if __name__ == '__main__':
-
-
     print("Getting available drivers")
-    devices = []
+    devices_available = []
     pci_devices = find_device_ids("pci")
-    devices.append(pci_devices)
     usb_devices = find_device_ids("usb")
-    devices.append(usb_devices)
+    devices_available.extend(pci_devices)
+    devices_available.extend(usb_devices)
     index = 0
     device_map = []
 
+
     empty_list = True
-    for device in devices:
-        for a in device.values():
-            error = a.get_repository_details()
-            if a.available:
-                empty_list = False
-                device_map.append(a)
-                index += 1
-                print(str(index) + ") " + a.getString() + " installable from www.tuxconfig.com")
+    for device in devices_available:
+        error = device.get_repository_details()
+        if device.available:
+            empty_list = False
+            device_map.append(device)
+            index += 1
+            print(str(index) + ") " +device.getString() + " installable from www.tuxconfig.com")
     if empty_list is True:
         print("No more drivers available for this device")
         exit(2)
@@ -473,7 +466,7 @@ if __name__ == '__main__':
             try_install = 1
         device_to_install = device_map[int(try_install) - 1]
         device_to_install.tried = True
-        install_result = device_to_install.install_device()
+        install_result = device_to_install.install_module()
         t = DaemonStoppableThread(device_to_install)
         t.start()
         if install_result is True:

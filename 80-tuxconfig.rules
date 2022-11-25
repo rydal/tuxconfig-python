@@ -1,5 +1,0 @@
-SUBSYSTEM=="usb", ACTION=="add", ENV{DEVTYPE}=="usb_device",  RUN+="/bin/device_added.sh"
-SUBSYSTEM=="tty",SUBSYSTEMS=="usb",DRIVERS=="usb",SYMLINK+="device_%s{serial}"
-SUBSYSTEM=="tty", ATTRS{idVendor}=="1d6b", ATTRS{idProduct}=="0002", ATTRS{serial}=="3f980000.usb", SYMLINK+="reader1"
-
-DRIVERS DEVPATH
