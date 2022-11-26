@@ -75,8 +75,8 @@ class MyWindow(Gtk.Window):
         self.add(scrolled_window)
         self.about_page = self.AboutPage()
         self.installable_page = self.ShowInstallableDevices()
-        self.creator_page = self.CreatorPage()
-        self.install_page = self.InstallDevice()
+        self.creator_page = None
+        self.install_page = None
         self.notebook.append_page(self.about_page.box, Gtk.Label(label="About tuxconfig"))
         self.notebook.append_page(self.installable_page.grid, Gtk.Label(label="Device list"))
 
@@ -108,7 +108,9 @@ class MyWindow(Gtk.Window):
             if device is not None and device.pk is not None:
                 webView = WebKit2.WebView()
                 webView.load_uri("https://www.tuxconfig.com/user/get_contributor/" + str(device.pk))
-                self.box.add(webView)
+                self.box.pack_end(webView,True,True,2)
+            else:
+                self.box.add(Gtk.Label(label="Device not defined"))
             self.box.show_all()
 
 
@@ -207,8 +209,9 @@ class MyWindow(Gtk.Window):
                 label.set_markup("<style text-color=\"color:redAccent\">Device installed failed</style>")
                 self.grid.attach(label,0,0,1,1)
 
-        def run_install(self):
-            MyWindow.notebook.append_page(MyWindow.install_page, Gtk.Label(label="Install device page"))
+        def run_install(self,device):
+            install_page = MyWindow.InstallDevice(device=device)
+            MyWindow.notebook.append_page(install_page, Gtk.Label(label="Install device page"))
             MyWindow.notebook.set_current_page(3)
 
             
@@ -293,7 +296,9 @@ class MyWindow(Gtk.Window):
                         success_label.override_color(Gtk.StateFlags.NORMAL, Gdk.RGBA(0.0, 0.0, 1.0, 0.0))
                         self.grid.attach(success_label)
                         self.t.cancel()
-                        MyWindow.notebook.append_page(MyWindow.install_page, Gtk.Label(label="About module contributor"))
+
+                        creator_page = MyWindow.CreatorPage(device=self.device)
+                        MyWindow.notebook.append_page(creator_page, Gtk.Label(label="About module contributor"))
                         MyWindow.notebook.set_current_page(4)
                     elif self.device.failed is True:
                         failed_label = Gtk.Label(label="Device unsuccessfully installed on this machine")
