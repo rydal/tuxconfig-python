@@ -120,9 +120,9 @@ class MyWindow(Gtk.Window):
             self.install_failed = None
             self.token = None
             self.grid = Gtk.Grid()
-            self.usb_modules_available = tuxconfig.get_modules_available(tuxconfig.find_device_ids('usb'))
-            self.pci_modules_available = tuxconfig.get_modules_available(tuxconfig.find_device_ids('pci'))
-
+            self.usb_modules_available = tuxconfig.find_device_ids("usb")
+            self.pci_modules_available = tuxconfig.find_device_ids("pci")
+            self.all_devices_available = self.usb_modules_available.extend(self.pci_modules_available)
             self.consent_label = Gtk.Label(label="Search for available models using this program, this will upload the identifiers of your USB and PCI devices")
             self.grid.attach(self.consent_label,True,True,1,1)
             button = Gtk.Button.new_with_label("remove driver")
@@ -130,8 +130,8 @@ class MyWindow(Gtk.Window):
             self.grid.attach(button, True,True, 1,1)
 
         def get_recaptcha(self):
-            self.token = librecaptcha.get_token(api_key="6LcpzzIjAAAAANZRqt762HGss9YRj3spNGkz3K2K",site_url="https://www.tuxconfig.com",gui=True,debug=True)
-            self.get_device_list()
+            token = librecaptcha.get_token(api_key="6LcpzzIjAAAAANZRqt762HGss9YRj3spNGkz3K2K",site_url="https://www.tuxconfig.com",gui=True,debug=True)
+            tuxconfig.get_modules_available(self.all_devices_available,token)
 
 
         def get_device_list(self):
@@ -140,7 +140,7 @@ class MyWindow(Gtk.Window):
             label.set_markup("<b>USB devices:</b>")
             self.grid.attach(label,0,1,1,1)
             device_index = 1
-            for device in tuxconfig.find_device_ids('usb'):
+            for device in self.usb_modules_available:
                 hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=50)
                 label = Gtk.Label(label=device.getString())
                 label.set_alignment(0.0, 0.0)
@@ -165,11 +165,11 @@ class MyWindow(Gtk.Window):
 
 
             label = Gtk.Label()
-            label.set_markup("USB devices:")
+            label.set_markup("<b>PCI devices:</b>")
             label.set_alignment(0.5, 0.0)
             self.grid.attach(label,0,device_index,1,1)
 
-            for device in tuxconfig.find_device_ids('usb'):
+            for device in self.pci_modules_available:
                 hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=50)
                 label = Gtk.Label(label=device.getString())
                 label.set_alignment(0.0, 0.0)

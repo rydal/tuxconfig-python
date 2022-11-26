@@ -56,7 +56,7 @@ def get_modules_available(device_array,recaptcha_token):
     device_string = []
 
     for device in device_array:
-        device_string.append(device.getDeviceString())
+        device_string.append({device.getDeviceString()})
     device_array.append({"recaptcha_token" : recaptcha_token})
     response = requests.post(
         'https://www.tuxconfig.com/user/get_device_available/',json=json.dumps(device_string))
@@ -91,6 +91,18 @@ class device_details:
         self.already_installed = False
         self.installed_status = 0
         self.install_directory = None
+        tuxconfig_file = Path('/var/lib/tuxconfig.log')
+        if tuxconfig_file.is_file():
+            with open('/var/lib/tuxconfig.log') as file:
+                for line in file:
+                    checking_device = json.loads(line)
+                    if checking_device['clone_url'] == self.clone_url and checking_device['commit'] == self.commit:
+                        if checking_device['tried'] is True:
+                            self.tried = True
+                        if checking_device['success'] is True:
+                            self.success = True
+                        else:
+                            print("Install marked as unsuccessful")
 
     def setName(self, device_name):
         self.device_name = device_name
@@ -119,45 +131,56 @@ class device_details:
     def setCommit(self, commit):
         self.commit = commit
 
+    def getString(self):
+        return self.vendor_id + ":" + self.device_id + " " + self.device_vendor + " " + self.device_name + "\n"
+
+    def getDeviceString(self):
+        return self.vendor_id + ":" + self.device_id
+
+    def getDeviceName(self):
+        return self.device_name
+    def getAvailable(self):
+        return self.available
+
+    def getCommit(self):
+        return self.commit
+
+    def getCloneUrl(self):
+        return self.clone_url
+
+    def getInstalledAlready(self):
+        return self.success
+
+    def getInstallTried(self):
+        return self.tried
 
     def get_repository_details(self):
 
-        response = requests.get(
-            'https://www.tuxconfig.com/user/get_device/' + self.vendor_id + ":" + self.device_id)
-        if response.status_code >= 400 and response.status_code < 404:
-            print("connection error")
-            return False
-        elif response.status_code >= 500:
-            print("server error")
-            return False
-        else:
-            print (response.content.decode('utf-8'))
-            try:
-                string = response.content.decode('utf-8')
-                json_response = json.loads(string)
-                if "none" in json_response:
-                    self.available = False
-                else:
 
-                    current_repository = json_response[0]
-                    drivers_available = 0
-                    for repository in current_repository:
-                        if repository['stars'] > current_repository['stars']:
-                            current_repository = repository
+        try:
+            string = InstallUpdates.device_array[self.device_id]
+            json_response = json.loads(string)
 
-                        self.available = True
-                        self.clone_url = current_repository['clone_url']
-                        self.commit = current_repository['commit']
-                        self.stars = current_repository['stars']
-                        self.pk = current_repository['pk']
-                        drivers_available += 1
-                        self.already_installed = self.already_installed(self)
-                        if device.tried:
-                            print("Trying next favoured install for " + self.device_vendor + " " + self.device_name)
-                    return current_repository, drivers_available
-            except JSONDecodeError:
-                print("cannot parse server request")
-                return False
+
+            current_repository = json_response[0]
+            drivers_available = 0
+            for repository in current_repository:
+                if repository['stars'] > current_repository['stars']:
+                    current_repository = repository
+
+                self.available = True
+                self.clone_url = current_repository['clone_url']
+                self.commit = current_repository['commit']
+                self.stars = current_repository['stars']
+                self.pk = current_repository['pk']
+                drivers_available += 1
+                self.already_installed = self.already_installed(self)
+                if device.tried:
+                    print("Trying next favoured install for " + self.device_vendor + " " + self.device_name)
+            return current_repository, drivers_available
+        except JSONDecodeError:
+            print("cannot parse server request")
+            return False
 
     def write_to_file(self):
         f = open("/var/lib/tuxconfig.log", "w+")
@@ -270,22 +293,6 @@ class device_details:
         append_to_logfile(str(streamdata, "utf-8") + "\n",self.install_directory,self.driver)
         append_to_logfile(get_module_install_status(6),self.install_directory,self.driver)
         return True
-
-
-    def getString(self):
-        return self.vendor_id + ":" + self.device_id + " " + self.device_vendor + " " + self.device_name + "\n"
-
-    def getDeviceString(self):
-        return self.vendor_id + ":" + self.device_id
-
-    def getAvailable(self):
-        return self.available
-
-    def getCommit(self):
-        return self.commit
-
-    def getCloneUrl(self):
-        return self.clone_url
 
 
 
